@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+/* ====================== DARK & LIGHT MODE HOÀN HẢO ====================== */
+.dark {
+  --bg: #0a0a0a;
+  --card: #111111;
+  --border: #333333;
+  --text: #ffffff;
+  --text2: #e0e0e0;
+  --muted: #aaaaaa;
+  --btn-inactive-bg: #1f2937;
+  --btn-inactive-text: #9ca3af;
+}
+
+.light {
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text2: #334155;
+  --muted: #64748b;
+  --btn-inactive-bg: #e2e8f0;
+  --btn-inactive-text: #475569;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  transition: background 0.4s ease, color 0.4s ease;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Nút đang bật / đang chọn */
+.btn-active {
+  background: linear-gradient(135deg, #8b5cf6, #ec4899) !important;
+  color: white !important;
+  box-shadow: 0 10px 30px rgba(139, 92, 246, 0.4) !important;
+}
+
+/* Nút tắt / không chọn */
+.btn-inactive {
+  background: var(--btn-inactive-bg) !important;
+  color: var(--btn-inactive-text) !important;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+
+/* Slider độ sáng đẹp cả 2 mode */
+input[type="range"] {
+  -webkit-appearance: none;
+  height: 12px;
+  border-radius: 999px;
+  background: #334155;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 28px;
+  width: 28px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(139,92,246,0.6);
+}
