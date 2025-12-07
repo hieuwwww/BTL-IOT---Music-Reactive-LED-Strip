@@ -99,6 +99,48 @@ void effectFire() {
   }
 }
 
+// ======================= EFFECTS (MIC MODE - SOUND REACTIVE) ============================
+
+// Hiệu ứng Mặc định: Mic Mode Pulse
+void effectMicPulse(int v) {
+  // v là giá trị âm thanh đã được map (10 -> brightnessValue)
+  // Đây là logic cũ của Mic Mode: Độ sáng/Màu thay đổi trực tiếp theo âm thanh
+  applyColor((colorR * v) / 255, (colorG * v) / 255, (colorB * v) / 255);
+}
+
+// Hiệu ứng: Mic Mode Rainbow (Tốc độ cầu vồng theo âm thanh)
+void effectMicRainbow(int v) {
+  static uint16_t j = 0;
+
+  // Map cường độ âm thanh (v) thành tốc độ xoay màu (50 (tĩnh) -> 500 (nhanh))
+  // Tốc độ thay đổi màu sẽ phản ứng theo nhịp điệu
+  int speedFactor = map(v, 10, brightnessValue, 50, 500);
+
+  for (int i = 0; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i,
+      strip.gamma32(strip.ColorHSV((i * 65535 / NUM_LEDS) + j))
+    );
+  }
+  strip.show();
+  
+  j += speedFactor; // Cập nhật màu với tốc độ thay đổi theo âm thanh
+}
+
+// Hiệu ứng: Mic Mode Fire (Cường độ lửa theo âm thanh)
+void effectMicFire(int v) {
+  // Map cường độ âm thanh (v) thành dải nhấp nháy
+  // Quiet (v=10): dim fire, Loud (v=255): bright fire
+  int minFlicker = map(v, 10, brightnessValue, 100, 150);
+  int maxFlicker = map(v, 10, brightnessValue, 150, 255);
+
+  for (int i = 0; i < NUM_LEDS; i++) {
+    // Tạo ngọn lửa ngẫu nhiên trong dải cường độ dựa trên âm thanh
+    int flicker = random(minFlicker, maxFlicker); 
+    strip.setPixelColor(i, strip.Color(flicker, flicker / 3, 0));
+  }
+  strip.show();
+}
+
 // ======================= MQTT CALLBACK ============================
 void mqttCallback(char* topic, byte* msg, unsigned int length) {
   msg[length] = '\0';
@@ -163,13 +205,15 @@ void setup() {
   client.setCallback(mqttCallback);
 }
 
+
 void reconnect() {
   while (!client.connected()) {
     Serial.println("[MQTT] Connecting...");
     if (client.connect("ESP32_LED_DEVICE_1")) {
       Serial.println("[MQTT] Connected OK");
       client.subscribe("led/control/#");
-      client.publish("led/status", "ESP32 OK");
+      // FIX: Thêm tham số 'true' để bật cờ Retain (Thông điệp sẽ được lưu trên Broker)
+      client.publish("led/status", "ESP32 OK", true); // <-- Đã sửa
     } else {
       Serial.println("[MQTT] Failed. Retry...");
       delay(1000);
@@ -197,13 +241,24 @@ void loop() {
 
   if (mode == "mic") {
     int mic = analogRead(MIC_PIN);
+    // Ánh xạ tín hiệu mic thô (0-4095) thành độ sáng/cường độ (10 -> Brightness Max)
     int v = map(mic, 0, 4095, 10, brightnessValue);
 
-    applyColor((colorR * v) / 255, (colorG * v) / 255, (colorB * v) / 255);
-
+    // Chọn hiệu ứng mic dựa trên biến 'effect' được set từ giao diện
+    if (effect == "rainbow") {
+      effectMicRainbow(v);
+    }
+    else if (effect == "fire") {
+      effectMicFire(v);
+    }
+    // Mặc định là hiệu ứng Pulse (phản ứng trực tiếp với độ sáng) hoặc khi chọn "fade"
+    else { 
+      effectMicPulse(v);
+    }
+    // Logging cho Mic mode
     if (millis() - lastLog > 400) {
-      Serial.printf("[MIC] raw=%d mapped=%d\n", mic, v);
+      Serial.printf("[MIC] mode=%s raw=%d mapped=%d\n", effect.c_str(), mic, v);
       lastLog = millis();
     }
-  }
+  }  
 }
