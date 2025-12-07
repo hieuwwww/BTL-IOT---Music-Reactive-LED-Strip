@@ -163,13 +163,15 @@ void setup() {
   client.setCallback(mqttCallback);
 }
 
+
 void reconnect() {
   while (!client.connected()) {
     Serial.println("[MQTT] Connecting...");
     if (client.connect("ESP32_LED_DEVICE_1")) {
       Serial.println("[MQTT] Connected OK");
       client.subscribe("led/control/#");
-      client.publish("led/status", "ESP32 OK");
+      // FIX: Thêm tham số 'true' để bật cờ Retain (Thông điệp sẽ được lưu trên Broker)
+      client.publish("led/status", "ESP32 OK", true); // <-- Đã sửa
     } else {
       Serial.println("[MQTT] Failed. Retry...");
       delay(1000);
