@@ -5,10 +5,12 @@ const socketIo = require('socket.io');
 const mqtt = require('mqtt');
 // NEW: Thêm import cho file upload và DB
 const mongoose = require('mongoose');
-
+const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const Music = require('./models/Music'); // Tự định nghĩa Schema
 const multer = require('multer');
-
+const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/user');
 // Khai báo thư mục lưu trữ file nhạc
 const UPLOAD_FOLDER = 'public/music';
 
@@ -32,7 +34,7 @@ const upload = multer({
   storage: storage
 });
 // --- Cấu hình Server ---
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // --- Cấu hình MQTT Broker (Cần phải khớp với cài đặt Mosquitto) ---
 // THAY ĐỔI IP NÀY CHO PHÙ HỢP VỚI MÁY CHẠY BROKER CỦA BẠN!
@@ -56,7 +58,8 @@ const app = express();
 // CORS middleware cho tất cả Express routes (HTTP requests)
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, authorization, Token, token');
+  res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
@@ -66,6 +69,12 @@ app.use((req, res, next) => {
 
 app.use(express.json()); // Dùng để xử lý body JSON cho API
 app.use(express.static('public')); // Cần thiết để phục vụ file nhạc (vd: public/music/...)
+
+app.use(cors());
+app.use(cookieParser());
+// Dùng route
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 
 const server = http.createServer(app);
 const io = socketIo(server, {

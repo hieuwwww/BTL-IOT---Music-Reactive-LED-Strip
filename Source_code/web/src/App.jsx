@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import io from "socket.io-client";
 import { HexColorPicker } from "react-colorful";
+import Auth from './Auth.jsx';
 // CẬP NHẬT: Thêm các Icons điều khiển nhạc
 import { Sun, Moon, Play, Pause, Repeat2, SkipForward, Trash2 } from "lucide-react"; 
 
@@ -76,6 +77,39 @@ function App() {
   const [micEffect, setMicEffect] = useState("pulse");
   const [syncEffect, setSyncEffect] = useState("fade");
 
+  // Authentication state
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [user, setUser] = useState(null);
+  const [validating, setValidating] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    (async () => {
+      setValidating(true);
+      try {
+        const res = await fetch(`${API_BASE_URL}/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) {
+          localStorage.removeItem('token');
+          setToken(null);
+          setUser(null);
+          setValidating(false);
+          return;
+        }
+        const data = await res.json();
+        setUser(data.user);
+      } catch (e) {
+        console.error('Failed to validate token', e);
+        localStorage.removeItem('token');
+        setToken(null);
+        setUser(null);
+      } finally {
+        setValidating(false);
+      }
+    })();
+  }, [token]);
+
   // Hàm gửi lệnh qua Socket.IO tới Node.js Server
   const send = (topic, payload) => {
     // Topic: led/control/power, led/control/brightness, v.v.
@@ -109,7 +143,7 @@ function App() {
     });
     return () => socket.off("mqtt");
   }, []);
-
+  
   // Hàm xử lý khi thay đổi màu
   const handleColorChange = (newColor) => {
     setColor(newColor);
@@ -415,7 +449,19 @@ function App() {
       if (audioContext && audioContext.state !== 'closed') audioContext.close();
     };
   }, []);
-  
+    // Nếu chưa xác thực, trả về giao diện Auth
+  if (!token) {
+    return (
+      <Auth
+        apiBase={API_BASE_URL}
+        onAuth={(u, t) => {
+          setToken(t);
+          localStorage.setItem('token', t);
+          setUser(u);
+        }}
+      />
+    );
+  }
   // Hàm xử lý khi tốc độ phát đổi (update audio ref ngay lập tức)
   const handleRateChange = (e) => {
     const newRate = Number(e.target.value);
@@ -437,23 +483,37 @@ function App() {
       >
         {/* Header + Dark mode toggle */}
         <div className="max-w-6xl mx-auto flex justify-between items-center mb-10">
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
-            Music Reactive LED
-          </h1>
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            className="p-4 rounded-2xl bg-var-card hover:scale-110 transition-all duration-300 shadow-xl"
-            style={{
-              background: "var(--card)",
-              boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
-            }}
-          >
-            {darkMode ? (
-              <Sun size={28} style={{ color: "#fbbf24" }} />
-            ) : (
-              <Moon size={28} style={{ color: "#6366f1" }} />
-            )}
-          </button>
+          <div className="flex items-center gap-4">
+            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
+              Music Reactive LED
+            </h1>
+            <div className="ml-4 text-sm opacity-80 px-3 py-2 rounded bg-var-card" style={{ background: 'var(--card)' }}>
+              <div>Xin chào, <strong className="text-indigo-500">{user?.username}</strong></div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className="p-3 rounded-2xl bg-var-card hover:scale-110 transition-all duration-300 shadow-xl"
+              style={{
+                background: "var(--card)",
+                boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+              }}
+            >
+              {darkMode ? (
+                <Sun size={22} style={{ color: "#fbbf24" }} />
+              ) : (
+                <Moon size={22} style={{ color: "#6366f1" }} />
+              )}
+            </button>
+            <button
+              onClick={() => { localStorage.removeItem('token'); setToken(null); setUser(null); }}
+              className="p-3 rounded-2xl bg-red-500 hover:bg-red-600 text-white"
+              title="Đăng xuất"
+            >
+              Đăng xuất
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 max-w-7xl mx-auto py-10">
