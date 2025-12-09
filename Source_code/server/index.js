@@ -7,6 +7,7 @@ const mqtt = require('mqtt');
 const mongoose = require('mongoose');
 
 const Music = require('./models/Music'); // Tự định nghĩa Schema
+const Device = require('./models/Device');
 const multer = require('multer');
 
 // Khai báo thư mục lưu trữ file nhạc
@@ -38,7 +39,10 @@ const PORT = 3000;
 // THAY ĐỔI IP NÀY CHO PHÙ HỢP VỚI MÁY CHẠY BROKER CỦA BẠN!
 const MQTT_BROKER_URL = 'mqtt://localhost:1883';
 // NEW: Cấu hình MongoDB
-const MONGO_URI = 'mongodb://localhost:27017/musicReactiveLed';
+// const MONGO_URI = 'mongodb://localhost:27017/musicReactiveLed';
+const MONGO_URI = 'mongodb+srv://admin:mJhuNbxji1Rf3sZD@ve-xe.gmmgk.mongodb.net/musicLed?retryWrites=true&w=majority&appName=ve-xe';
+
+const FIRMWARE_HTTP_PORT = 8080;
 
 // --- Tạo thư mục nếu chưa tồn tại ---
 const fs = require('fs');
@@ -101,6 +105,63 @@ mongoose.connect(MONGO_URI)
     mongoConnected = false;
     console.warn('[DB] MongoDB connection failed (app will still work with file storage only):', err.message);
   });
+
+// 1) device register (called by device or admin)
+app.post('/api/devices/register', async (req, res) => {
+  try {
+    const { deviceId, deviceName, firmware } = req.body;
+
+    if (!deviceId) {
+      return res.status(400).json({ error: "deviceId is required" });
+    }
+
+    const device = await Device.findByIdAndUpdate(
+      deviceId,
+      {
+        name: deviceName || deviceId,
+        firmware: firmware || "unknown",
+        last_online: new Date(),
+        status: "online"
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    console.log(`[REGISTER] Device registered: ${deviceId} (${deviceName || 'No name'})`);
+    res.json({ success: true, device });
+  } catch (err) {
+    console.error("[REGISTER] Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2) list devices
+app.get('/api/devices', async (req, res) => {
+  const devices = await Device.find().lean();
+  res.json(devices);
+});
+
+// 3) get device
+app.get('/api/devices/:id', async (req, res) => {
+  const d = await Device.findById(req.params.id).lean();
+  if (!d) return res.status(404).json({ error: 'Not found' });
+  res.json(d);
+});
+
+// 4) set wifi credentials for device (server -> device via mqtt)
+app.post('/api/devices/:id/wifi', async (req, res) => {
+  const id = req.params.id;
+  const { ssid, password } = req.body;
+  if (!ssid) return res.status(400).json({ error: 'ssid required' });
+
+  // save to DB (optionally encrypted)
+  await Device.findByIdAndUpdate(id, { wifi_ssid: ssid, wifi_pass: password });
+
+  // publish to device topic
+  const topic = `led/control/wifi_config`;
+  const payload = JSON.stringify({ ssid, password, deviceName: deviceName || "" });
+
+  mqttClient.publish(topic, payload, { qos: 1 });
+});
 
 // API 1: Upload file và lưu vào DB (nếu MongoDB khả dụng)
 app.post('/api/music/upload', upload.single('musicFile'), async (req, res) => {
@@ -183,6 +244,31 @@ app.get('/api/music/list', async (req, res) => {
     console.error('❌ Error fetching songs:', error);
     res.status(500).json({ error: 'Lỗi Server khi lấy danh sách: ' + error.message });
   }
+});
+
+app.post('/api/device/register', async (req, res) => {
+  const { device_id, chip, firmware } = req.body;
+
+  if (!device_id) return res.status(400).json({ error: "Missing device_id" });
+
+  const device = await Device.findByIdAndUpdate(
+    device_id,
+    { chip, firmware, last_online: new Date(), status: "online" },
+    { upsert: true, new: true }
+  );
+
+  res.json(device);
+});
+
+app.post('/api/device/:id/wifi', async (req, res) => {
+  const { ssid, password } = req.body;
+  const id = req.params.id;
+
+  await Device.findByIdAndUpdate(id, { wifi_ssid: ssid, wifi_pass: password });
+
+  mqttClient.publish(`/device/${id}/wifi_config`, JSON.stringify({ ssid, password }));
+
+  res.json({ message: "WiFi sent to device" });
 });
 
 // -------------------------------------------------------------------
